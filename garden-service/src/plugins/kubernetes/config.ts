@@ -57,11 +57,15 @@ interface KubernetesStorage {
 
 export type ContainerBuildMode = "local-docker" | "cluster-docker" | "kaniko"
 
+export type DefaultDeploymentStrategy = "rolling"
+export type DeploymentStrategy = DefaultDeploymentStrategy | "blue-green"
+
 export interface KubernetesBaseConfig extends ProviderConfig {
   buildMode: ContainerBuildMode
   context: string
   defaultHostname?: string
   defaultUsername?: string
+  deploymentStrategy?: DeploymentStrategy
   forceSsl: boolean
   imagePullSecrets: ProviderSecretRef[]
   ingressHttpPort: number

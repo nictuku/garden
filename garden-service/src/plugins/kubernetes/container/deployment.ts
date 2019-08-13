@@ -7,8 +7,8 @@
  */
 
 import { V1Container } from "@kubernetes/client-node"
-import { extend, keyBy, set } from "lodash"
 import { Service, ServiceStatus } from "../../../types/service"
+import { extend, first, find, keyBy, set } from "lodash"
 import { ContainerModule, ContainerService } from "../../container/config"
 import { createIngressResources } from "./ingress"
 import { createServiceResources } from "./service"
@@ -19,7 +19,7 @@ import { PluginContext } from "../../../plugin-context"
 import { KubeApi } from "../api"
 import { KubernetesProvider, KubernetesPluginContext } from "../config"
 import { configureHotReload } from "../hot-reload"
-import { KubernetesResource } from "../types"
+import { KubernetesResource, KubernetesServerResource } from "../types"
 import { ConfigurationError } from "../../../exceptions"
 import { getContainerServiceStatus } from "./status"
 import { containerHelpers } from "../../container/helpers"
@@ -35,10 +35,22 @@ export const DEFAULT_CPU_REQUEST = "10m"
 export const DEFAULT_MEMORY_REQUEST = "64Mi"
 
 export async function deployContainerService(params: DeployServiceParams<ContainerModule>): Promise<ServiceStatus> {
+  const { deploymentStrategy } = params.ctx.provider.config
+
+  if (deploymentStrategy === "blue-green") {
+    return deployContainerServiceBlueGreen(params)
+  } else {
+    return deployContainerServiceRolling(params)
+  }
+}
+
+export async function deployContainerServiceRolling(
+  params: DeployServiceParams<ContainerModule>): Promise<ServiceStatus> {
   const { ctx, service, runtimeContext, force, log, hotReload } = params
   const k8sCtx = <KubernetesPluginContext>ctx
 
   const namespace = await getAppNamespace(k8sCtx, log, k8sCtx.provider)
+
   const manifests = await createContainerObjects(k8sCtx, log, service, runtimeContext, hotReload)
 
   // TODO: use Helm instead of kubectl apply
@@ -55,6 +67,110 @@ export async function deployContainerService(params: DeployServiceParams<Contain
     log,
   })
 
+  return getContainerServiceStatus(params)
+}
+
+// Given an array of k8s resources and a Garden service returns a matching k8s resource
+function getResourceForService(items: KubernetesServerResource[], service) {
+  return first(items.filter((resource) => {
+    return resource.metadata
+      && resource.metadata.labels
+      && resource.metadata.labels["module"] === service.module.name
+      && resource.metadata.labels["service"] === service.name
+  }))
+}
+
+export async function deployContainerServiceBlueGreen(
+  params: DeployServiceParams<ContainerModule>): Promise<ServiceStatus> {
+
+  const { ctx, service, runtimeContext, force, log, hotReload } = params
+  const k8sCtx = <KubernetesPluginContext>ctx
+  const namespace = await getAppNamespace(k8sCtx, log, k8sCtx.provider)
+
+  // Create all the resource manifests for the Garden service which will be deployed
+  const manifests = await createContainerObjects(k8sCtx, log, service, runtimeContext, hotReload)
+
+  const provider = k8sCtx.provider
+  const api = await KubeApi.factory(log, provider)
+
+  // Retrieve the k8s service referring to the Garden service which is already deployed
+  const currentService = (await api.core.listNamespacedService(namespace))
+      .items.filter(s => s.metadata.name === service.name)
+
+  // If none it means this is the first deployment
+  const isServiceAlreadyDeployed = currentService.length > 0
+
+  if (!isServiceAlreadyDeployed) {
+    // No service found, no need to execute a blue-green deployment
+    // Just apply all the resources for the Garden service
+    await apply({ log, provider, manifests, force, namespace })
+    await waitForResources({
+      ctx: k8sCtx,
+      provider: k8sCtx.provider,
+      serviceName: service.name,
+      resources: manifests,
+      log,
+    })
+
+  } else {
+    // A k8s service matching the current Garden service exist in the cluster.
+    // Proceeding with blue-green deployment
+
+    const deployments = await api.apps.listNamespacedDeployment(namespace)
+    // Retrieve current deployment
+    const oldDeployment = getResourceForService(deployments.items, service)
+
+    // Remove Service manifest from generated resources
+    const filteredManifests = manifests.filter(manifest => manifest.kind !== "Service")
+    // Retrieve new (yet-to-be-deployed) Deployment manifest
+    const deploymentManifest = find(manifests, (manifest) => {
+      return manifest.kind === "Deployment"
+        && manifest.metadata.labels.version === service.module.version.versionString
+    })
+
+    // Apply new Deployment manifest (deploy the Green version)
+    await apply({ log, provider, manifests: filteredManifests, force, namespace })
+    await waitForResources({
+      ctx: k8sCtx,
+      provider: k8sCtx.provider,
+      serviceName: `Deploy ${service.name}`,
+      resources: filteredManifests,
+      log,
+    })
+
+    // Patch for the current service to point to the new Deployment
+    const servicePatchBody = {
+      spec: {
+        selector: {
+          version: deploymentManifest.metadata.labels.version,
+        },
+      },
+    }
+
+    // Patch service (divert traffic from Blue to Green)
+    await api.core.patchNamespacedService(service.name, namespace, servicePatchBody)
+
+    await waitForResources({
+      ctx: k8sCtx,
+      provider: k8sCtx.provider,
+      serviceName: `Update service`,
+      resources: manifests,
+      log,
+    })
+
+    if (oldDeployment) {
+      // Delete old Deployment (Blue)
+      await api.apps.deleteNamespacedDeployment(oldDeployment.metadata.name, namespace)
+
+      await waitForResources({
+        ctx: k8sCtx,
+        provider: k8sCtx.provider,
+        serviceName: `Old ${service.name} delete`,
+        resources: manifests,
+        log,
+      })
+    }
+  }
   return getContainerServiceStatus(params)
 }
 
@@ -131,6 +247,11 @@ export async function createDeployment(
   env.push({
     name: "POD_SERVICE_ACCOUNT",
     valueFrom: { fieldRef: { fieldPath: "spec.serviceAccountName" } },
+  })
+
+  env.push({
+    name: "VERSION",
+    value: service.module.version.versionString,
   })
 
   const registryConfig = provider.config.deploymentRegistry
@@ -260,17 +381,26 @@ export async function createDeployment(
 
 function deploymentConfig(service: Service, configuredReplicas: number, namespace: string): object {
 
-  const labels = {
+  let labels = {
     module: service.module.name,
     service: service.name,
+    version: service.module.version.versionString,
   }
+
+  let selector: any = {
+    matchLabels: {
+      service: service.name,
+    },
+  }
+
+  selector.matchLabels.version = service.module.version.versionString
 
   // TODO: moar type-safety
   return {
     kind: "Deployment",
     apiVersion: "apps/v1",
     metadata: {
-      name: service.name,
+      name: `${service.name}-${service.module.version.versionString}`,
       annotations: {
         // we can use this to avoid overriding the replica count if it has been manually scaled
         "garden.io/configured.replicas": configuredReplicas.toString(),
@@ -279,11 +409,7 @@ function deploymentConfig(service: Service, configuredReplicas: number, namespac
       labels,
     },
     spec: {
-      selector: {
-        matchLabels: {
-          service: service.name,
-        },
-      },
+      selector,
       template: {
         metadata: {
           labels,
@@ -305,7 +431,6 @@ function deploymentConfig(service: Service, configuredReplicas: number, namespac
       },
     },
   }
-
 }
 
 function configureHealthCheck(container, spec): void {
