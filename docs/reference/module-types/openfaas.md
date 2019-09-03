@@ -8,8 +8,6 @@ guide](../../using-garden/configuration-files.md).
 The [first section](#configuration-keys) lists and describes the available
 schema keys. The [second section](#complete-yaml-schema) contains the complete YAML schema.
 
-`openfaas` modules also export values that are available in template strings. See the [Outputs](#outputs) section below for details.
-
 ## Configuration keys
 
 ### `apiVersion`
@@ -326,71 +324,4 @@ tests:
     command:
     env: {}
 ```
-
-## Outputs
-
-### Module outputs
-
-The following keys are available via the `${modules.<module-name>}` template string key for `openfaas`
-modules.
-
-### `modules.<module-name>.buildPath`
-
-The build path of the module.
-
-| Type     | Required |
-| -------- | -------- |
-| `string` | Yes      |
-
-Example:
-
-```yaml
-buildPath: "/home/me/code/my-project/.garden/build/my-module"
-```
-
-### `modules.<module-name>.path`
-
-The local path of the module.
-
-| Type     | Required |
-| -------- | -------- |
-| `string` | Yes      |
-
-Example:
-
-```yaml
-path: "/home/me/code/my-project/my-module"
-```
-
-### `modules.<module-name>.version`
-
-The current version of the module.
-
-| Type     | Required |
-| -------- | -------- |
-| `string` | Yes      |
-
-Example:
-
-```yaml
-version: "v-17ad4cb3fd"
-```
-
-### `modules.<module-name>.outputs`
-
-The outputs defined by the module.
-
-| Type     | Required |
-| -------- | -------- |
-| `object` | Yes      |
-
-### `modules.<module-name>.outputs.endpoint`
-
-[outputs](#outputs) > endpoint
-
-The full URL to query this service _from within_ the cluster.
-
-| Type     | Required |
-| -------- | -------- |
-| `string` | Yes      |
 

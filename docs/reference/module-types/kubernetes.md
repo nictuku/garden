@@ -16,8 +16,6 @@ guide](../../using-garden/configuration-files.md).
 The [first section](#configuration-keys) lists and describes the available
 schema keys. The [second section](#complete-yaml-schema) contains the complete YAML schema.
 
-`kubernetes` modules also export values that are available in template strings. See the [Outputs](#outputs) section below for details.
-
 ## Configuration keys
 
 ### `apiVersion`
@@ -208,7 +206,7 @@ POSIX-style path or filename to copy the directory or file(s).
 
 ### `dependencies`
 
-The names of any services that this service depends on at runtime, and the names of any tasks that should be executed before this service is deployed.
+List of names of services that should be deployed before this chart.
 
 | Type            | Required | Default |
 | --------------- | -------- | ------- |
@@ -294,61 +292,4 @@ manifests:
       name:
 files: []
 ```
-
-## Outputs
-
-### Module outputs
-
-The following keys are available via the `${modules.<module-name>}` template string key for `kubernetes`
-modules.
-
-### `modules.<module-name>.buildPath`
-
-The build path of the module.
-
-| Type     | Required |
-| -------- | -------- |
-| `string` | Yes      |
-
-Example:
-
-```yaml
-buildPath: "/home/me/code/my-project/.garden/build/my-module"
-```
-
-### `modules.<module-name>.path`
-
-The local path of the module.
-
-| Type     | Required |
-| -------- | -------- |
-| `string` | Yes      |
-
-Example:
-
-```yaml
-path: "/home/me/code/my-project/my-module"
-```
-
-### `modules.<module-name>.version`
-
-The current version of the module.
-
-| Type     | Required |
-| -------- | -------- |
-| `string` | Yes      |
-
-Example:
-
-```yaml
-version: "v-17ad4cb3fd"
-```
-
-### `modules.<module-name>.outputs`
-
-The outputs defined by the module.
-
-| Type     | Required |
-| -------- | -------- |
-| `object` | Yes      |
 

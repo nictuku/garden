@@ -6,4 +6,3 @@
 * [Kubernetes](./kubernetes.md)
 * [Maven Container](./maven-container.md)
 * [Openfaas](./openfaas.md)
-* [Terraform](./terraform.md)

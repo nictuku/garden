@@ -539,7 +539,7 @@ Only applies when `buildMode` is set to `cluster-docker`, ignored otherwise.
 
 [providers](#providers) > [storage](#providers[].storage) > [builder](#providers[].storage.builder) > size
 
-Volume size in megabytes.
+Volume size for the registry in megabytes.
 
 | Type     | Required | Default |
 | -------- | -------- | ------- |
@@ -572,7 +572,7 @@ Only applies when `buildMode` is set to `cluster-docker` or `kaniko`, ignored ot
 
 [providers](#providers) > [storage](#providers[].storage) > [registry](#providers[].storage.registry) > size
 
-Volume size in megabytes.
+Volume size for the registry in megabytes.
 
 | Type     | Required | Default |
 | -------- | -------- | ------- |
@@ -595,10 +595,6 @@ Storage class to use for the volume.
 Storage parameters for the code sync volume, which build contexts are synced to ahead of running
 in-cluster builds.
 
-Important: The storage class configured here has to support _ReadWriteMany_ access.
-If you don't specify a storage class, Garden creates an NFS provisioner and provisions an ephemeral
-NFS volume for the sync data volume.
-
 Only applies when `buildMode` is set to `cluster-docker` or `kaniko`, ignored otherwise.
 
 | Type     | Required | Default                              |
@@ -609,7 +605,7 @@ Only applies when `buildMode` is set to `cluster-docker` or `kaniko`, ignored ot
 
 [providers](#providers) > [storage](#providers[].storage) > [sync](#providers[].storage.sync) > size
 
-Volume size in megabytes.
+Volume size for the registry in megabytes.
 
 | Type     | Required | Default |
 | -------- | -------- | ------- |
@@ -836,31 +832,3 @@ providers:
     namespace:
     setupIngressController: nginx
 ```
-
-## Outputs
-
-The following keys are available via the `${providers.<provider-name>}` template string key for `local-kubernetes` providers.
-
-### `providers.<provider-name>.app-namespace`
-
-The primary namespace used for resource deployments.
-
-| Type     | Required |
-| -------- | -------- |
-| `string` | Yes      |
-
-### `providers.<provider-name>.default-hostname`
-
-The default hostname configured on the provider.
-
-| Type     | Required |
-| -------- | -------- |
-| `string` | No       |
-
-### `providers.<provider-name>.metadata-namespace`
-
-The namespace used for Garden metadata.
-
-| Type     | Required |
-| -------- | -------- |
-| `string` | Yes      |
