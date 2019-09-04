@@ -212,3 +212,5 @@ If you change your mind and would like to update your analytics settings, please
 ## License
 
 Garden is licensed according to [Mozilla Public License 2.0 (MPL-2.0)](LICENSE.md).
+
+..
