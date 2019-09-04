@@ -1,0 +1,10 @@
+dependencies:
+  build:
+    - node:10.16.3
+
+build_targets:
+  - name: node_base
+    commands:
+      - npm build
+      - npm run bootstrap
+      - npm ci
