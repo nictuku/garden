@@ -386,7 +386,8 @@ describe("Garden", () => {
       await expectError(
         () => garden.resolveProviders(),
         err => expect(err.message).to.equal(
-          "Failed resolving one or more provider configurations:\n- test: Could not find key: bla.ble",
+          "Failed resolving one or more provider configurations:\n" +
+          "- test: Invalid template string \${bla.ble}: Unable to resolve one or more keys.",
         ),
       )
     })
@@ -894,6 +895,7 @@ describe("Garden", () => {
       await expectError(
         () => garden.resolveModuleConfigs(),
         (err) => expect(err.message).to.equal(
+          "Invalid template string \${modules.module-a.version}: " +
           "Circular reference detected when resolving key modules.module-a (from modules.module-a)",
         ),
       )

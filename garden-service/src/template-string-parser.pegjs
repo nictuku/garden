@@ -13,45 +13,36 @@ TemplateString
   / $(.*) { return text() === "" ? [] : [text()] }
 
 FormatString
-  = FormatStart v:Literal FormatEnd {
-      return v
+  = FormatStart e:Expression FormatEnd {
+    return Promise.resolve(e)
+      .then(v => {
+        if (v && v._error) {
+          return v
+        }
+
+        if (v === undefined && !options.allowUndefined) {
+          const _error = new options.TemplateStringError("Unable to resolve one or more keys.", {
+            text: text(),
+          })
+          return { _error }
+        }
+        return v
+      })
+      .catch(_error => {
+        return { _error }
+      })
   }
-  / FormatStart v:Key FormatEnd {
-      return options.getKey(v)
-  }
-  / FormatStart head:LiteralOrKey tail:(Or LiteralOrKey)* FormatEnd {
-      const keys = [head, ...tail.map(t => t[1])]
-
-      // Resolve all the keys
-      return Promise.all(keys.map(key =>
-        options.lodash.isArray(key) ? options.getKey(key, { allowUndefined: true }) : key,
-      ))
-        .then(candidates => {
-          // Return the first non-undefined value
-          for (const value of candidates) {
-            if (value !== undefined) {
-              return value
-            }
-          }
-
-          throw new options.ConfigurationError("None of the keys could be resolved in the conditional: " + text())
-        })
-    }
-
-LiteralOrKey
-  = Literal
-  / Key
 
 InvalidFormatString
   = Prefix? FormatStart .* {
-  	throw new options.TemplateStringError("Invalid template string: " + text())
+  	throw new options.TemplateStringError("Unable to parse as valid template string.")
   }
 
 FormatStart
-  = "${" ws
+  = "${" __
 
 FormatEnd
-  = ws "}"
+  = __ "}"
 
 Identifier
   = [a-zA-Z][a-zA-Z0-9_\-]* { return text() }
@@ -64,17 +55,113 @@ Key
     return [["", head]].concat(tail).map(p => p[1])
   }
 
-Or
-  = ws "||" ws
-
 Prefix
   = !FormatStart (. ! FormatStart)* . { return text() }
 
 Suffix
   = !FormatEnd (. ! FormatEnd)* . { return text() }
 
+// ---- expressions -----
+// Reduced and adapted from: https://github.com/pegjs/pegjs/blob/master/examples/javascript.pegjs
+PrimaryExpression
+  = v:Literal {
+    return v
+  }
+  / key:Key {
+    return options.getKey(key, { allowUndefined: true })
+      .catch(_error => {
+        return { _error }
+      })
+  }
+  / "(" __ e:Expression __ ")" {
+    return e
+  }
+
+MultiplicativeExpression
+  = head:PrimaryExpression
+    tail:(__ MultiplicativeOperator __ PrimaryExpression)*
+    { return options.buildBinaryExpression(head, tail); }
+
+MultiplicativeOperator
+  = $("*" !"=")
+  / $("/" !"=")
+  / $("%" !"=")
+
+AdditiveExpression
+  = head:MultiplicativeExpression
+    tail:(__ AdditiveOperator __ MultiplicativeExpression)*
+    { return options.buildBinaryExpression(head, tail); }
+
+AdditiveOperator
+  = $("+" ![+=])
+  / $("-" ![-=])
+
+RelationalExpression
+  = head:AdditiveExpression
+    tail:(__ RelationalOperator __ AdditiveExpression)*
+    { return options.buildBinaryExpression(head, tail); }
+
+RelationalOperator
+  = "<="
+  / ">="
+  / $("<" !"<")
+  / $(">" !">")
+
+EqualityExpression
+  = head:RelationalExpression
+    tail:(__ EqualityOperator __ RelationalExpression)*
+    { return options.buildBinaryExpression(head, tail); }
+
+EqualityOperator
+  = "=="
+  / "!="
+
+LogicalANDExpression
+  = head:EqualityExpression
+    tail:(__ LogicalANDOperator __ EqualityExpression)*
+    { return options.buildLogicalExpression(head, tail); }
+
+LogicalANDOperator
+  = "&&"
+
+LogicalORExpression
+  = head:LogicalANDExpression
+    tail:(__ LogicalOROperator __ LogicalANDExpression)*
+    { return options.buildLogicalExpression(head, tail); }
+
+LogicalOROperator
+  = "||"
+
+ConditionalExpression
+  = test:LogicalORExpression __
+    "?" __ consequent:Expression __
+    ":" __ alternate:Expression
+    {
+      return Promise.all([test, consequent, alternate])
+        .then(([t, c, a]) => {
+          if (t && t._error) {
+            return t
+          }
+          if (c && c._error) {
+            return c
+          }
+          if (a && a._error) {
+            return a
+          }
+
+          return t ? c : a
+        })
+        .catch(_error => {
+          return { _error }
+        })
+    }
+  / LogicalORExpression
+
+Expression
+  = ConditionalExpression
+
 // Much of the below is based on https://github.com/pegjs/pegjs/blob/master/examples/json.pegjs
-ws "whitespace" = [ \t\n\r]*
+__ "whitespace" = [ \t\n\r]*
 
 // ----- Literals -----
 
@@ -85,14 +172,14 @@ Literal
   / StringLiteral
 
 BooleanLiteral
-  = ws "true" ws { return true }
-  / ws "false" ws { return false }
+  = __ "true" __ { return true }
+  / __ "false" __ { return false }
 
 NullLiteral
-  = ws "null" ws { return null }
+  = __ "null" __ { return null }
 
 NumberLiteral
-  = ws Minus? Int Frac? Exp? ws { return parseFloat(text()); }
+  = __ Minus? Int Frac? Exp? __ { return parseFloat(text()); }
 
 DecimalPoint
   = "."
@@ -122,8 +209,8 @@ Zero
   = "0"
 
 StringLiteral
-  = ws '"' chars:DoubleQuotedChar* '"' ws { return chars.join(""); }
-  / ws "'" chars:SingleQuotedChar* "'" ws { return chars.join(""); }
+  = __ '"' chars:DoubleQuotedChar* '"' __ { return chars.join(""); }
+  / __ "'" chars:SingleQuotedChar* "'" __ { return chars.join(""); }
 
 Escape
   = "\\"

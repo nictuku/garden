@@ -72,7 +72,7 @@ describe("resolveTemplateString", async () => {
     try {
       await resolveTemplateString("${some}", new TestContext({}))
     } catch (err) {
-      expect(err.message).to.equal("Could not find key: some")
+      expect(err.message).to.equal("Invalid template string ${some}: Unable to resolve one or more keys.")
       return
     }
 
@@ -83,7 +83,7 @@ describe("resolveTemplateString", async () => {
     try {
       await resolveTemplateString("${some.other}", new TestContext({ some: {} }))
     } catch (err) {
-      expect(err.message).to.equal("Could not find key: some.other")
+      expect(err.message).to.equal("Invalid template string ${some.other}: Unable to resolve one or more keys.")
       return
     }
 
@@ -91,23 +91,23 @@ describe("resolveTemplateString", async () => {
   })
 
   it("should throw when a found key is not a primitive", async () => {
-    try {
-      await resolveTemplateString("${some}", new TestContext({ some: {} }))
-    } catch (err) {
-      expect(err.message).to.equal(
-        "Config value at some exists but is not a primitive (string, number, boolean or null)",
-      )
-      return
-    }
-
-    throw new Error("Expected error")
+    return expectError(
+      () => resolveTemplateString(
+        "${some}",
+        new TestContext({ some: {} }),
+      ),
+      (err) => expect(err.message).to.equal(
+        "Invalid template string ${some}: " +
+        "Config value at 'some' exists but is not a primitive (string, number, boolean or null)",
+      ),
+    )
   })
 
   it("should throw with an incomplete template string", async () => {
     try {
       await resolveTemplateString("${some", new TestContext({ some: {} }))
     } catch (err) {
-      expect(err.message).to.equal("Invalid template string: ${some")
+      expect(err.message).to.equal("Invalid template string ${some: Unable to parse as valid template string.")
       return
     }
 
@@ -120,7 +120,9 @@ describe("resolveTemplateString", async () => {
         "${resol${part}ed}",
         new TestContext({}),
       ),
-      (err) => (expect(err.message).to.equal("Invalid template string: ${resol${part}ed}")),
+      (err) => (expect(err.message).to.equal(
+        "Invalid template string ${resol${part}ed}: Unable to parse as valid template string.",
+      )),
     )
   })
 
@@ -210,7 +212,9 @@ describe("resolveTemplateString", async () => {
         "${'foo}",
         new TestContext({}),
       ),
-      (err) => (expect(err.message).to.equal("Invalid template string: ${'foo}")),
+      (err) => (expect(err.message).to.equal(
+        "Invalid template string ${'foo}: Unable to parse as valid template string.",
+      )),
     )
   })
 
@@ -220,7 +224,9 @@ describe("resolveTemplateString", async () => {
         "${\"foo}",
         new TestContext({}),
       ),
-      (err) => (expect(err.message).to.equal("Invalid template string: ${\"foo}")),
+      (err) => (expect(err.message).to.equal(
+        "Invalid template string ${\"foo}: Unable to parse as valid template string.",
+      )),
     )
   })
 
@@ -300,7 +306,7 @@ describe("resolveTemplateString", async () => {
         "${a || b}",
         new TestContext({}),
       ),
-      "configuration",
+      (err) => expect(err.message).to.equal("Invalid template string ${a || b}: Unable to resolve one or more keys."),
     )
   })
 
@@ -310,7 +316,9 @@ describe("resolveTemplateString", async () => {
         "${a || 'b}",
         new TestContext({}),
       ),
-      (err) => (expect(err.message).to.equal("Invalid template string: ${a || 'b}")),
+      (err) => (expect(err.message).to.equal(
+        "Invalid template string ${a || 'b}: Unable to parse as valid template string.",
+      )),
     )
   })
 
@@ -320,6 +328,214 @@ describe("resolveTemplateString", async () => {
       new TestContext({ a: undefined }),
     )
     expect(res).to.equal("a")
+  })
+
+  it("should handle a positive equality comparison between equal resolved values", async () => {
+    const res = await resolveTemplateString(
+      "${a == b}",
+      new TestContext({ a: "a", b: "a" }),
+    )
+    expect(res).to.equal(true)
+  })
+
+  it("should handle a positive equality comparison between equal string literals", async () => {
+    const res = await resolveTemplateString(
+      "${'a' == 'a'}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(true)
+  })
+
+  it("should handle a positive equality comparison between equal numeric literals", async () => {
+    const res = await resolveTemplateString(
+      "${123 == 123}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(true)
+  })
+
+  it("should handle a positive equality comparison between equal boolean literals", async () => {
+    const res = await resolveTemplateString(
+      "${true == true}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(true)
+  })
+
+  it("should handle a positive equality comparison between different resolved values", async () => {
+    const res = await resolveTemplateString(
+      "${a == b}",
+      new TestContext({ a: "a", b: "b" }),
+    )
+    expect(res).to.equal(false)
+  })
+
+  it("should handle a positive equality comparison between different string literals", async () => {
+    const res = await resolveTemplateString(
+      "${'a' == 'b'}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(false)
+  })
+
+  it("should handle a positive equality comparison between different numeric literals", async () => {
+    const res = await resolveTemplateString(
+      "${123 == 456}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(false)
+  })
+
+  it("should handle a positive equality comparison between different boolean literals", async () => {
+    const res = await resolveTemplateString(
+      "${true == false}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(false)
+  })
+
+  it("should handle a negative equality comparison between equal resolved values", async () => {
+    const res = await resolveTemplateString(
+      "${a != b}",
+      new TestContext({ a: "a", b: "a" }),
+    )
+    expect(res).to.equal(false)
+  })
+
+  it("should handle a negative equality comparison between equal string literals", async () => {
+    const res = await resolveTemplateString(
+      "${'a' != 'a'}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(false)
+  })
+
+  it("should handle a negative equality comparison between equal numeric literals", async () => {
+    const res = await resolveTemplateString(
+      "${123 != 123}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(false)
+  })
+
+  it("should handle a negative equality comparison between equal boolean literals", async () => {
+    const res = await resolveTemplateString(
+      "${false != false}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(false)
+  })
+
+  it("should handle a negative equality comparison between different resolved values", async () => {
+    const res = await resolveTemplateString(
+      "${a != b}",
+      new TestContext({ a: "a", b: "b" }),
+    )
+    expect(res).to.equal(true)
+  })
+
+  it("should handle a negative equality comparison between different string literals", async () => {
+    const res = await resolveTemplateString(
+      "${'a' != 'b'}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(true)
+  })
+
+  it("should handle a negative equality comparison between different numeric literals", async () => {
+    const res = await resolveTemplateString(
+      "${123 != 456}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(true)
+  })
+
+  it("should handle a negative equality comparison between different boolean literals", async () => {
+    const res = await resolveTemplateString(
+      "${true != false}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(true)
+  })
+
+  it("should handle a positive equality comparison between different value types", async () => {
+    const res = await resolveTemplateString(
+      "${true == 'foo'}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(false)
+  })
+
+  it("should handle a negative equality comparison between different value types", async () => {
+    const res = await resolveTemplateString(
+      "${123 != false}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(true)
+  })
+
+  it("should throw when using comparison operators on missing keys", async () => {
+    return expectError(
+      () => resolveTemplateString(
+        "${a >= b}",
+        new TestContext({ a: 123 }),
+      ),
+      (err) => (expect(err.message).to.equal(
+        "Invalid template string ${a >= b}: Could not resolve one or more keys.",
+      )),
+    )
+  })
+
+  it("should correctly evaluate clauses in parentheses", async () => {
+    const res = await resolveTemplateString(
+      "${(1 + 2) * (3 + 4)}",
+      new TestContext({}),
+    )
+    expect(res).to.equal(21)
+  })
+
+  it("should throw when using >= on non-numeric terms", async () => {
+    return expectError(
+      () => resolveTemplateString(
+        "${a >= b}",
+        new TestContext({ a: 123, b: "foo" }),
+      ),
+      (err) => (expect(err.message).to.equal(
+        "Invalid template string ${a >= b}: Both terms need to be numbers for >= operator (got number and string).",
+      )),
+    )
+  })
+
+  it("should handle a positive ternary expression", async () => {
+    const res = await resolveTemplateString(
+      "${foo ? true : false}",
+      new TestContext({ foo: true }),
+    )
+    expect(res).to.equal(true)
+  })
+
+  it("should handle a negative ternary expression", async () => {
+    const res = await resolveTemplateString(
+      "${foo ? true : false}",
+      new TestContext({ foo: false }),
+    )
+    expect(res).to.equal(false)
+  })
+
+  it("should handle a ternary expression with nested expressions", async () => {
+    const res = await resolveTemplateString(
+      "${foo == 'bar' ? a : b}",
+      new TestContext({ foo: "bar", a: true, b: false }),
+    )
+    expect(res).to.equal(true)
+  })
+
+  it("should handle an expression in parentheses", async () => {
+    const res = await resolveTemplateString(
+      "${foo || (a > 5)}",
+      new TestContext({ foo: false, a: 10 }),
+    )
+    expect(res).to.equal(true)
   })
 
   context("when the template string is the full input string", () => {
