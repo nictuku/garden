@@ -8,7 +8,7 @@ build_targets:
       - npm install --no-optional
       - npm ci
       - npm run bootstrap
-  - name: test
+  - name: test_service
     build_after:
       - node_base
     environment:
@@ -20,9 +20,10 @@ build_targets:
       - git config --global user.name "Garden CI"
       - git config --global user.email "admin@garden.io"
       - cd garden-service
+      - npm install
       - npm test
 
 ci:
   builds:
-    - name: test
-      build_target: test
+    - name: test_service
+      build_target: test_service
