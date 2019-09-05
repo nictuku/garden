@@ -14,7 +14,7 @@ build_targets:
     environment:
       - CHOKIDAR_USEPOLLING="1"
     commands:
-      - apt-get update && sudo apt-get install rsync
+      - apt-get update && apt-get install rsync
       - git config --global user.name "Garden CI"
       - git config --global user.email "admin@garden.io"
       - cd garden-service
