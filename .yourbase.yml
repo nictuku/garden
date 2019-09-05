@@ -8,3 +8,19 @@ build_targets:
       - npm install --no-optional
       - npm ci
       - npm run bootstrap
+  - name: test
+    build_after:
+      - node_base
+    environment:
+      - CHOKIDAR_USEPOLLING="1"
+    commands:
+      - sudo apt-get update && sudo apt-get install rsync
+      - git config --global user.name "Garden CI"
+      - git config --global user.email "admin@garden.io"
+      - cd garden-service
+      - npm test
+
+ci:
+  builds:
+    - name: node_base
+      build_target: node_base
