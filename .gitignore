@@ -40,3 +40,5 @@ garden-service/static/dashboard/
 
 #debug files
 debug-info-*
+.yb-tmp/
+dashboard/package.json.lerna_backup
