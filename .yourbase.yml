@@ -22,5 +22,5 @@ build_targets:
 
 ci:
   builds:
-    - name: node_base
-      build_target: node_base
+    - name: test
+      build_target: test
