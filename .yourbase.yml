@@ -13,9 +13,10 @@ build_targets:
       - node_base
     environment:
       - CHOKIDAR_USEPOLLING="1"
+      - DEBIAN_FRONTEND=noninteractive
     commands:
-      - apt-get update
-      - apt-get install rsync
+      - apt-get update -q
+      - apt-get install -yq rsync
       - git config --global user.name "Garden CI"
       - git config --global user.email "admin@garden.io"
       - cd garden-service
