@@ -27,3 +27,18 @@ ci:
   builds:
     - name: test_service
       build_target: test_service
+
+# done:
+# - test-service
+
+# next:
+# - build
+# - build-dist
+# - lint
+# - e2e-test-service
+# - test-dashboard
+# - build-docker
+# - release-docker-service
+# - release-service-dist-edge
+# - test-dist
+# - test-minikube
