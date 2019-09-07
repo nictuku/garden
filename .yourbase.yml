@@ -19,8 +19,9 @@ build_targets:
       - apt-get install -yq rsync
       - git config --global user.name "Garden CI"
       - git config --global user.email "admin@garden.io"
-      - cd garden-service
       - npm install
+      - cd garden-service
+      - npm run build
       - npm test
 
 ci:
